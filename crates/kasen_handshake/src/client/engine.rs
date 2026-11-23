@@ -1080,8 +1080,21 @@ pub struct ServerHelloReadState<B: TlsCrypto, K, V, P, Z, G> {
     ticket: Option<OfferedTicket<B>>,
     suite: SupportedSuite<B>,
     selected_psk: Option<PskIndex>,
-    early_offered: bool,
+    early: EarlyOffer,
     handshake: HandshakeSecret<Client, B>,
+}
+
+/// Whether the ClientHello the server answered offers 0-RTT.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EarlyOffer {
+    /// No ClientHello offered it.
+    NotOffered,
+    /// The ClientHello the server answered carries `early_data`.
+    Offered,
+    /// The first ClientHello offered it, and the second one, after a
+    /// HelloRetryRequest, does not (RFC 8446 §4.2.10): the server rejected
+    /// it, and an `early_data` in its EncryptedExtensions is unsolicited.
+    Withdrawn,
 }
 
 /// The state of a client's handshake once it is complete: what keeping the
@@ -1388,6 +1401,11 @@ where
             .map_err(|source| alert(ClientAlertError::KeyExchange { source }))?;
         drop(exchanges);
         let selected_psk = server_hello.pre_shared_key();
+        let early = match (early_offered, &sent) {
+            (false, _) => EarlyOffer::NotOffered,
+            (true, Sent::First { .. }) => EarlyOffer::Offered,
+            (true, Sent::Second { .. }) => EarlyOffer::Withdrawn,
+        };
         let psk_error = |source| alert(ClientAlertError::Psk { source });
         let (handshake, secrets) = match sent {
             Sent::First { hello, psk } => match psk {
@@ -1443,7 +1461,7 @@ where
             ticket,
             suite,
             selected_psk,
-            early_offered,
+            early,
             handshake,
         };
         Ok((read, state))
@@ -1473,7 +1491,7 @@ where
             ticket,
             suite,
             selected_psk,
-            early_offered,
+            early,
             handshake,
         } = state;
         move_to::<W, _>(host, CryptoLevel::Handshake)?;
@@ -1519,18 +1537,18 @@ where
             .extensions()
             .iter()
             .any(|extension| matches!(extension, EncryptedExtensionsExtension::EarlyData));
-        let early_data = match (early_offered, early_accepted) {
-            (false, false) => EarlyDataOutcome::NotOffered,
-            (false, true) => {
+        let early_data = match (early, early_accepted) {
+            (EarlyOffer::NotOffered, false) => EarlyDataOutcome::NotOffered,
+            (EarlyOffer::NotOffered | EarlyOffer::Withdrawn, true) => {
                 return Err(alert(ClientAlertError::Unsolicited {
                     extension: UnsolicitedExtension::EarlyData,
                 }));
             }
-            (true, true) if selected_psk != Some(PskIndex::new(0)) => {
+            (EarlyOffer::Offered, true) if selected_psk != Some(PskIndex::new(0)) => {
                 return Err(alert(ClientAlertError::EarlyDataWithoutPsk));
             }
-            (true, true) => EarlyDataOutcome::Accepted,
-            (true, false) => EarlyDataOutcome::Rejected,
+            (EarlyOffer::Offered, true) => EarlyDataOutcome::Accepted,
+            (EarlyOffer::Offered | EarlyOffer::Withdrawn, false) => EarlyDataOutcome::Rejected,
         };
         host.peer(&peer_parameters)
             .map_err(|error| HandshakeError::Transport { source: error })?;

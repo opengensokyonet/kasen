@@ -1469,3 +1469,7 @@ fn a_client_that_does_not_name_psk_dhe_ke_gets_no_tickets() {
         );
     }
 }
+
+// After the macros above, which the modules use.
+#[path = "handshake_engines/retry_early_data.rs"]
+mod retry_early_data;
