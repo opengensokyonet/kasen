@@ -51,7 +51,9 @@ fn verify_data(base: &[u8], transcript_hash: &[u8]) -> Vec<u8> {
 
 /// Appends an empty `early_data` extension to the EncryptedExtensions in
 /// `bytes`, and recomputes the server's Finished after it over `before`,
-/// the transcript up to it.
+/// the transcript up to it. The CertificateVerify keeps its old signature:
+/// a fixed client fails at the EncryptedExtensions before it reads it, and
+/// an unfixed one fails there instead.
 fn add_early_data(bytes: &mut Vec<u8>, before: &[Vec<u8>], secret: &[u8]) {
     let found = messages(bytes);
     let mut changed = Vec::new();

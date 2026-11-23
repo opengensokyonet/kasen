@@ -74,6 +74,46 @@ fn a_message_is_collected_across_waits() {
     assert_eq!(source.bytes, [0x14]);
 }
 
+/// A body past the buffer a message starts with, arriving across waits,
+/// is collected whole as the buffer grows.
+#[test]
+fn a_long_message_is_collected_across_waits() {
+    let body: Vec<u8> = (0..10_000u32).map(|i| i as u8).collect();
+    let encoded = message(11, &body);
+    let mut source = Trickle {
+        bytes: encoded.clone(),
+        ready: false,
+    };
+    let mut read =
+        core::pin::pin!(source.read_handshake_message_unpin(MessageLimits::default(), None));
+    let mut cx = Context::from_waker(Waker::noop());
+    let message = loop {
+        if let Poll::Ready(message) = read.as_mut().poll(&mut cx) {
+            break message.unwrap();
+        }
+    };
+    assert_eq!(message.encoded().as_ref(), encoded);
+}
+
+/// The public reader receives every type that QUIC carries.
+#[test]
+fn the_public_reader_receives_every_carried_type() {
+    for value in 0..=u8::MAX {
+        if ReceivedMessageType::new(HandshakeType(value)).is_none() {
+            continue;
+        }
+        let encoded = message(value, &[]);
+        let read = encoded.as_slice().sync_read_handshake_message_unpin(
+            MessageLimits::default(),
+            Some(HashAlgorithm::Sha256),
+        );
+        assert!(
+            !matches!(read, Err(ReadHandshakeMessageError::Unexpected { .. })),
+            "{value}: {read:?}"
+        );
+    }
+}
+
 #[test]
 fn a_length_above_the_limit_fails_before_the_body() {
     let limits = MessageLimits {
