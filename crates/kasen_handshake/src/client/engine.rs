@@ -627,12 +627,20 @@ pub enum ClientAlertError<V> {
         /// The failure.
         source: ReadCertificateRequestError,
     },
+    /// The CertificateRequest has a certificate_request_context, which only
+    /// post-handshake authentication uses (RFC 9846 §4.4.2).
+    #[snafu(display("CertificateRequest has a certificate_request_context"))]
+    CertificateRequestContext,
     /// The Certificate could not be read.
     #[snafu(display("Certificate read failed"))]
     Certificate {
         /// The failure.
         source: ReadCertificateError,
     },
+    /// The server's Certificate has a certificate_request_context, which is
+    /// empty in server authentication (RFC 9846 §4.5.1).
+    #[snafu(display("server Certificate has a certificate_request_context"))]
+    CertificateContext,
     /// The certificate chain does not authenticate the server.
     #[snafu(display("server certificate rejected"))]
     Verify {
@@ -684,7 +692,8 @@ impl<V: CallsForAlert> CallsForAlert for ClientAlertError<V> {
     /// version before TLS 1.3; missing_extension without transport
     /// parameters; no_application_protocol when none was selected;
     /// unsupported_extension for an unsolicited one; illegal_parameter for
-    /// the other fields that disagree with the ClientHello; internal_error for
+    /// the other fields that disagree with the ClientHello and for a
+    /// certificate_request_context during the handshake; internal_error for
     /// failures of the client itself; and that of the source otherwise.
     fn alert(&self) -> AlertDescription {
         match self {
@@ -703,7 +712,9 @@ impl<V: CallsForAlert> CallsForAlert for ClientAlertError<V> {
             | Self::PskHash
             | Self::UnofferedProtocol
             | Self::EarlyDataWithoutPsk
-            | Self::UnofferedScheme { .. } => AlertDescription::ILLEGAL_PARAMETER,
+            | Self::UnofferedScheme { .. }
+            | Self::CertificateRequestContext
+            | Self::CertificateContext => AlertDescription::ILLEGAL_PARAMETER,
             Self::KeyExchange { source } => match source {
                 CompleteError::InvalidPeerShare { .. } => AlertDescription::ILLEGAL_PARAMETER,
                 CompleteError::Decapsulation { .. } => AlertDescription::INTERNAL_ERROR,
@@ -1583,6 +1594,9 @@ where
                 if message.handshake_type() == HandshakeType::CERTIFICATE_REQUEST {
                     let request = read_certificate_request(&mut message.encoded().clone())
                         .map_err(|source| alert(ClientAlertError::CertificateRequest { source }))?;
+                    if !request.certificate_request_context().is_empty() {
+                        return Err(alert(ClientAlertError::CertificateRequestContext));
+                    }
                     if let Some(never) = certificates.select(&target, &request) {
                         match never {}
                     }
@@ -1599,6 +1613,9 @@ where
                 let certificate =
                     read_certificate(&mut message.encoded().clone(), CertificateFormat::X509)
                         .map_err(|source| alert(ClientAlertError::Certificate { source }))?;
+                if !certificate.certificate_request_context().is_empty() {
+                    return Err(alert(ClientAlertError::CertificateContext));
+                }
                 let leaf = verifier
                     .verify(&target, certificate.certificates().entries())
                     .await
