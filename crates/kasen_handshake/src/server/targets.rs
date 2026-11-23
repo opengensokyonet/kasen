@@ -25,8 +25,26 @@ pub struct SelectedTarget<T> {
     /// The target.
     pub target: T,
     /// The application protocol, `None` when the connection negotiates
-    /// none.
+    /// none. It must be one the ClientHello offers, which the engine checks
+    /// (RFC 7301 §3.2).
     pub application_protocol: Option<ProtocolName<Bytes>>,
+}
+
+impl<T> SelectedTarget<T> {
+    /// Whether `hello` offers the application protocol, if there is one
+    /// (RFC 7301 §3.2).
+    pub(crate) fn protocol_offered<C: AsRef<[u8]>>(&self, hello: &ClientHello<C>) -> bool {
+        let Some(ours) = &self.application_protocol else {
+            return true;
+        };
+        hello
+            .application_layer_protocol_negotiation()
+            .is_some_and(|list| {
+                list.names()
+                    .iter()
+                    .any(|theirs| theirs.name().as_ref() == ours.name().as_ref())
+            })
+    }
 }
 
 /// How a server picks the target of a ClientHello.
@@ -42,7 +60,8 @@ pub trait TargetSelection {
     where
         Self: 'a;
 
-    /// Selects the target of `hello` and its application protocol.
+    /// Selects the target of `hello` and its application protocol, one that
+    /// `hello` offers.
     fn select<'a>(&'a self, hello: &'a ClientHello<Bytes>) -> Self::Selecting<'a>;
 }
 
@@ -161,6 +180,10 @@ impl<T: Clone> TargetSelection for SniTargets<T> {
 
 /// A target selected before the handshake began, which every selection
 /// hands over whatever the ClientHello.
+///
+/// Its application protocol must be one the client offers, in the first
+/// ClientHello and in a second one after a HelloRetryRequest; the engine
+/// checks it (RFC 7301 §3.2).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreselectedTarget<T> {
     selected: SelectedTarget<T>,

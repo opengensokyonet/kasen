@@ -1475,5 +1475,7 @@ fn a_client_that_does_not_name_psk_dhe_ke_gets_no_tickets() {
 mod certificate_context;
 #[path = "handshake_engines/post_handshake.rs"]
 mod post_handshake;
+#[path = "handshake_engines/protocol_offer.rs"]
+mod protocol_offer;
 #[path = "handshake_engines/retry_early_data.rs"]
 mod retry_early_data;

@@ -628,6 +628,10 @@ pub enum ServerAlertError<L, S, G, K> {
     /// offer.
     #[snafu(display("parameter choice outside the client's offer"))]
     ChoiceNotOffered,
+    /// The target selection picked an application protocol the client did
+    /// not offer, in the first ClientHello or in the second (RFC 7301 §3.2).
+    #[snafu(display("application protocol outside the client's offer"))]
+    ProtocolNotOffered,
     /// The second ClientHello does not carry exactly one key share, of the
     /// group the HelloRetryRequest named (RFC 9846 §4.2.2).
     #[snafu(display("second ClientHello does not share the requested group"))]
@@ -742,6 +746,7 @@ impl<L: CallsForAlert, S: CallsForAlert, G, K> CallsForAlert for ServerAlertErro
             Self::NoCommonScheme { source } => source.alert(),
             Self::Finished { source } => source.alert(),
             Self::ChoiceNotOffered
+            | Self::ProtocolNotOffered
             | Self::TicketIndex { .. }
             | Self::Random { .. }
             | Self::EncryptedExtensions { .. }
@@ -1079,6 +1084,9 @@ where
             .select(accepted.client_hello())
             .await
             .map_err(|source| alert(ServerAlertError::Target { source }))?;
+        if !selected.protocol_offered(accepted.client_hello()) {
+            return Err(alert(ServerAlertError::ProtocolNotOffered));
+        }
         let (chosen, needs_retry) = {
             let offer = ClientOffer::from_client_hello(accepted.client_hello());
             let chosen = choice
@@ -1141,6 +1149,9 @@ where
             }
             if offer.key_share_groups() != [group.algorithm()] {
                 return Err(alert(ServerAlertError::RetryKeyShare));
+            }
+            if !selected.protocol_offered(hello) {
+                return Err(alert(ServerAlertError::ProtocolNotOffered));
             }
             (accepted, transcript, true)
         } else {
