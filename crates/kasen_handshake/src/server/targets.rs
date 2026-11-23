@@ -76,6 +76,12 @@ struct SniEntry<T> {
 /// ASCII case, with an optional fallback for a ClientHello without a name
 /// or with a name of no target.
 ///
+/// A name inserted with a trailing dot is served without it, as a client
+/// sends `server_name` without the trailing dot ([RFC 6066 §3]); a received
+/// name is matched as it is.
+///
+/// [RFC 6066 §3]: https://www.rfc-editor.org/rfc/rfc6066.html#section-3
+///
 /// Each target has the application protocols it serves, most preferred
 /// first. The protocol is the first of them the client offers; a target
 /// with no protocols negotiates none.
@@ -101,8 +107,10 @@ impl<T> SniTargets<T> {
     }
 
     /// Serves `target` for `host_name` with `protocols`, replacing an
-    /// earlier target of the name.
+    /// earlier target of the name. A trailing dot of `host_name` is not part
+    /// of the name.
     pub fn insert(&mut self, host_name: &str, target: T, protocols: Vec<ProtocolName<Bytes>>) {
+        let host_name = host_name.strip_suffix('.').unwrap_or(host_name);
         self.names.insert(
             host_name.as_bytes().to_ascii_lowercase(),
             SniEntry { target, protocols },
@@ -313,6 +321,26 @@ mod tests {
             SelectedTarget {
                 target: "raw",
                 application_protocol: None
+            }
+        );
+    }
+
+    #[test]
+    fn a_name_inserted_with_a_trailing_dot_is_served_without_it() {
+        let mut targets = SniTargets::new();
+        targets.insert("Example.COM.", "web", vec![]);
+        let selected = select(&targets, &hello(Some(b"example.com"), &[])).unwrap();
+        assert_eq!(selected.target, "web");
+        // The same name without the dot replaces it.
+        targets.insert("example.com", "other", vec![]);
+        let selected = select(&targets, &hello(Some(b"example.com"), &[])).unwrap();
+        assert_eq!(selected.target, "other");
+        // A received name is matched as it is.
+        let error = select(&targets, &hello(Some(b"example.com."), &[])).unwrap_err();
+        assert_eq!(
+            error,
+            SelectTargetError::UnknownServerName {
+                name: Bytes::from_static(b"example.com.")
             }
         );
     }
