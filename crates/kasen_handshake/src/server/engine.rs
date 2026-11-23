@@ -82,7 +82,7 @@ use crate::{
     },
     key_log::{KeyLog, KeyLogLabel},
     message::{
-        HandshakeMessage, HelloRandom, MessageLimits,
+        HandshakeMessage, HelloRandom, MessageLimits, ReceivedMessageType,
         certificate::{
             Certificate, CertificateEntry, CertificateList, InvalidCertificateEntryError,
             InvalidCertificateError, codec::write_certificate,
@@ -92,7 +92,7 @@ use crate::{
             ClientHello, ClientHelloExtension,
             codec::{ReadClientHelloError, read_client_hello},
         },
-        codec::{ReadHandshakeMessageError, ReadHandshakeMessageExt as _},
+        codec::{ReadHandshakeMessageError, read_expected_handshake_message},
         encrypted_extensions::{
             EncryptedExtensions, EncryptedExtensionsExtension, codec::write_encrypted_extensions,
         },
@@ -319,7 +319,7 @@ pub async fn read_first_client_hello<W: CryptoInput>(
     limits: MessageLimits,
 ) -> Result<FirstClientHello, HandshakeError<ReadFirstClientHelloError, <W as Read>::Error>> {
     let encoded =
-        host.read_handshake_message(limits, None)
+        read_expected_handshake_message(host, limits, None, &[ReceivedMessageType::ClientHello])
             .await
             .map_err(|error| match split_read(error) {
                 Ok(source) => alert(ReadFirstClientHelloError::Message { source }),
@@ -781,16 +781,17 @@ fn alert<F, E>(source: F) -> HandshakeError<F, E> {
     HandshakeError::Alert { source }
 }
 
-/// Collects one handshake message from `host`.
+/// Collects one handshake message of a type in `expected` from `host`.
 async fn read_message<T, W, L, S, G, K>(
     host: &mut impl ReceiverAccess<Family = W>,
     limits: MessageLimits,
     hash: Option<HashAlgorithm>,
+    expected: &[ReceivedMessageType],
 ) -> Result<HandshakeMessage, Failed<ServerAlertError<L, S, G, K>, W, T>>
 where
     W: ServerHandshakeCapability<T>,
 {
-    host.read_handshake_message(limits, hash)
+    read_expected_handshake_message(host, limits, hash, expected)
         .await
         .map_err(|error| match split_read(error) {
             Ok(source) => alert(ServerAlertError::Message { source }),
@@ -1117,7 +1118,13 @@ where
             let transcript = Transcript::<Server, B>::new(&backend, suite.hash())
                 .add(accepted.encoded().encoded())
                 .retry(&encoded);
-            let second = read_message::<S::Target, W, _, _, _, _>(host, limits, None).await?;
+            let second = read_message::<S::Target, W, _, _, _, _>(
+                host,
+                limits,
+                None,
+                &[ReceivedMessageType::ClientHello],
+            )
+            .await?;
             let hello = read_hello(&second).map_err(alert)?;
             check_session_id(&hello)?;
             let accepted = layers
@@ -1462,9 +1469,13 @@ where
             psk_dhe,
             main,
         } = state;
-        let received =
-            read_message::<S::Target, W, _, _, _, _>(host, limits, Some(suite.hash().algorithm()))
-                .await?;
+        let received = read_message::<S::Target, W, _, _, _, _>(
+            host,
+            limits,
+            Some(suite.hash().algorithm()),
+            &[ReceivedMessageType::Finished],
+        )
+        .await?;
         let (resumption, completed) = main
             .client_finished(&received)
             .map_err(|source| alert(ServerAlertError::Finished { source }))?;

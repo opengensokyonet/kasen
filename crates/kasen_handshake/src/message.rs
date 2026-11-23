@@ -436,12 +436,14 @@ pub mod codec {
 
     use super::{HandshakeMessage, HandshakeType, MessageLimits, ReceivedMessageType};
     use crate::alert::AlertDescription;
-    use bytes::{BufMut, BytesMut};
+    use alloc::vec::Vec;
+    use bytes::Bytes;
     use nitori_call::{ReceiverAccess, call};
     use nitori_crypto::HashAlgorithm;
     use nitori_io::{
         Read,
         calls::{ReadArrayError, ReadArrayExt as _, ReadExactError, ReadExactExt as _},
+        error::IncompleteError,
     };
     use snafu::{IntoError, ResultExt, Snafu};
 
@@ -450,7 +452,8 @@ pub mod codec {
     /// The limit for the type comes from `limits`, and for Finished from
     /// `hash`, the hash of the cipher suite once it is known. A length above
     /// the limit fails before the body is read. The operation keeps the
-    /// bytes it has read while it waits for more.
+    /// bytes it has read while it waits for more; its buffer grows with the
+    /// body as it arrives, rather than to the length the header states.
     ///
     /// # Errors
     ///
@@ -461,11 +464,42 @@ pub mod codec {
         limits: MessageLimits,
         hash: Option<HashAlgorithm>,
     ) -> Result<HandshakeMessage, ReadHandshakeMessageError<F::Error>> {
+        read_expected_handshake_message(io, limits, hash, &RECEIVED_TYPES).await
+    }
+
+    /// Every type of [`ReceivedMessageType`].
+    const RECEIVED_TYPES: [ReceivedMessageType; 8] = [
+        ReceivedMessageType::ClientHello,
+        ReceivedMessageType::ServerHello,
+        ReceivedMessageType::EncryptedExtensions,
+        ReceivedMessageType::CertificateRequest,
+        ReceivedMessageType::Certificate,
+        ReceivedMessageType::CertificateVerify,
+        ReceivedMessageType::Finished,
+        ReceivedMessageType::NewSessionTicket,
+    ];
+
+    /// The capacity a message starts with: a header alone reserves no more,
+    /// whatever length it states.
+    const INITIAL_CAPACITY: usize = 4096;
+
+    /// [`read_handshake_message`] for a step of a handshake that receives
+    /// only the types in `expected`: a message of another type fails with
+    /// [`UnexpectedMessageError`] before its body is read, and the limits of
+    /// the other types do not apply.
+    pub(crate) async fn read_expected_handshake_message<F: Read>(
+        io: &mut impl ReceiverAccess<Family = F>,
+        limits: MessageLimits,
+        hash: Option<HashAlgorithm>,
+        expected: &[ReceivedMessageType],
+    ) -> Result<HandshakeMessage, ReadHandshakeMessageError<F::Error>> {
         use read_handshake_message_error::*;
         let header = io.read_array::<4>().await.context(HeaderSnafu)?;
         let message_type = HandshakeType(header[0]);
         let len = u32::from_be_bytes([0, header[1], header[2], header[3]]);
-        let Some(received) = ReceivedMessageType::new(message_type) else {
+        let Some(received) =
+            ReceivedMessageType::new(message_type).filter(|received| expected.contains(received))
+        else {
             return Err(UnexpectedMessageError { message_type }.into());
         };
         let Some(limit) = limits.limit(received, hash) else {
@@ -480,22 +514,38 @@ pub mod codec {
             .into());
         }
         let len = len as usize;
-        let mut encoded = BytesMut::with_capacity(4 + len);
-        encoded.put_slice(&header);
-        match io.read_exact(&mut encoded, len).await {
-            Ok(()) => {}
-            Err(ReadExactError::Incomplete { source }) => {
-                return Err(BodySnafu.into_error(ReadArrayError::Incomplete { source }));
+        let total = 4 + len;
+        let mut encoded = Vec::with_capacity(total.min(INITIAL_CAPACITY));
+        encoded.extend_from_slice(&header);
+        while encoded.len() < total {
+            if encoded.len() == encoded.capacity() {
+                // Doubling keeps the buffer within twice what has arrived,
+                // and within the message.
+                encoded.reserve_exact(encoded.capacity().min(total - encoded.len()));
             }
-            Err(ReadExactError::Receiver { source, completed }) => {
-                return Err(BodySnafu.into_error(ReadArrayError::Receiver { source, completed }));
+            let before = encoded.len() - 4;
+            let step = (encoded.capacity() - encoded.len()).min(total - encoded.len());
+            match io.read_exact(&mut encoded, step).await {
+                Ok(()) => {}
+                Err(ReadExactError::Incomplete { source }) => {
+                    // invariant: fewer than `step` bytes of this read
+                    // arrived, and `before + step` is at most `len`.
+                    let source = IncompleteError::new(len, before + source.completed())
+                        .expect("an incomplete body");
+                    return Err(BodySnafu.into_error(ReadArrayError::Incomplete { source }));
+                }
+                Err(ReadExactError::Receiver { source, completed }) => {
+                    return Err(BodySnafu.into_error(ReadArrayError::Receiver {
+                        source,
+                        completed: before + completed,
+                    }));
+                }
+                // invariant: a `Vec` has room for `isize::MAX` bytes.
+                Err(ReadExactError::InsufficientCapacity { source }) => unreachable!("{source}"),
             }
-            // invariant: the buffer has room for the body, since it grows on
-            // demand up to `isize::MAX` bytes.
-            Err(ReadExactError::InsufficientCapacity { source }) => unreachable!("{source}"),
         }
         Ok(HandshakeMessage {
-            encoded: encoded.freeze(),
+            encoded: Bytes::from(encoded),
         })
     }
 
@@ -554,8 +604,9 @@ pub mod codec {
         }
     }
 
-    /// A message of a type that QUIC does not carry, or a Finished message
-    /// before the cipher suite is known.
+    /// A message of a type that QUIC does not carry, of a type the handshake
+    /// does not receive at this step, or a Finished message before the
+    /// cipher suite is known.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Snafu)]
     #[snafu(display("{message_type:?} message is not received here"))]
     pub struct UnexpectedMessageError {

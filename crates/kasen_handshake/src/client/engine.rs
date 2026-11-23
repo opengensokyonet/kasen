@@ -83,6 +83,7 @@ use crate::{
     key_log::{KeyLog, KeyLogLabel},
     message::{
         HandshakeMessage, HandshakeType, HelloRandom, LegacySessionId, MessageLimits,
+        ReceivedMessageType,
         certificate::{
             Certificate, CertificateFormat, CertificateList,
             codec::{ReadCertificateError, read_certificate, write_certificate},
@@ -92,7 +93,7 @@ use crate::{
         client_hello::{
             ClientHello, ClientHelloExtension, InvalidClientHelloError, codec::write_client_hello,
         },
-        codec::{ReadHandshakeMessageError, ReadHandshakeMessageExt as _},
+        codec::{ReadHandshakeMessageError, read_expected_handshake_message},
         encrypted_extensions::{
             EncryptedExtensionsExtension,
             codec::{ReadEncryptedExtensionsError, read_encrypted_extensions},
@@ -736,13 +737,14 @@ fn alert<F, E>(source: F) -> HandshakeError<F, E> {
 /// How a step fails with the verifier's failure `V` on the family `W`.
 type Failed<V, W> = HandshakeError<ClientAlertError<V>, <W as ClientTransport>::Error>;
 
-/// Collects one handshake message from `host`.
+/// Collects one handshake message of a type in `expected` from `host`.
 async fn read_message<W: ClientHandshakeCapability, V>(
     host: &mut impl ReceiverAccess<Family = W>,
     limits: MessageLimits,
     hash: Option<HashAlgorithm>,
+    expected: &[ReceivedMessageType],
 ) -> Result<HandshakeMessage, Failed<V, W>> {
-    host.read_handshake_message(limits, hash)
+    read_expected_handshake_message(host, limits, hash, expected)
         .await
         .map_err(|error| match split_read(error) {
             Ok(source) => alert(ClientAlertError::Message { source }),
@@ -1294,7 +1296,9 @@ where
             early_offered,
         } = state;
         let (server_hello, encoded_server_hello) = loop {
-            let message = read_message::<W, _>(host, limits, None).await?;
+            let message =
+                read_message::<W, _>(host, limits, None, &[ReceivedMessageType::ServerHello])
+                    .await?;
             let reply = read_server_hello_message(&mut message.encoded().clone())
                 .map_err(|source| alert(ClientAlertError::ServerHello { source }))?;
             let retry = match reply {
@@ -1498,7 +1502,13 @@ where
         let hash = Some(suite.hash().algorithm());
 
         // EncryptedExtensions.
-        let message = read_message::<W, _>(host, limits, hash).await?;
+        let message = read_message::<W, _>(
+            host,
+            limits,
+            hash,
+            &[ReceivedMessageType::EncryptedExtensions],
+        )
+        .await?;
         let extensions = read_encrypted_extensions(&mut message.encoded().clone())
             .map_err(|source| alert(ClientAlertError::EncryptedExtensions { source }))?;
         let peer_parameters = extensions
@@ -1557,7 +1567,16 @@ where
         // The server authenticates, by certificate or by PSK.
         let (authenticated, identity, requested) = match handshake.authentication() {
             Authentication::Certificate(mut authentication) => {
-                let mut message = read_message::<W, _>(host, limits, hash).await?;
+                let mut message = read_message::<W, _>(
+                    host,
+                    limits,
+                    hash,
+                    &[
+                        ReceivedMessageType::CertificateRequest,
+                        ReceivedMessageType::Certificate,
+                    ],
+                )
+                .await?;
                 let mut requested = None;
                 if message.handshake_type() == HandshakeType::CERTIFICATE_REQUEST {
                     let request = read_certificate_request(&mut message.encoded().clone())
@@ -1567,7 +1586,13 @@ where
                     }
                     requested = Some(request.certificate_request_context().clone());
                     authentication = authentication.add(message.encoded());
-                    message = read_message::<W, _>(host, limits, hash).await?;
+                    message = read_message::<W, _>(
+                        host,
+                        limits,
+                        hash,
+                        &[ReceivedMessageType::Certificate],
+                    )
+                    .await?;
                 }
                 let certificate =
                     read_certificate(&mut message.encoded().clone(), CertificateFormat::X509)
@@ -1577,7 +1602,13 @@ where
                     .await
                     .map_err(|source| alert(ClientAlertError::Verify { source }))?;
                 let authentication = authentication.add(message.encoded());
-                let message = read_message::<W, _>(host, limits, hash).await?;
+                let message = read_message::<W, _>(
+                    host,
+                    limits,
+                    hash,
+                    &[ReceivedMessageType::CertificateVerify],
+                )
+                .await?;
                 let verify =
                     read_certificate_verify(&mut message.encoded().clone()).map_err(|source| {
                         alert(ClientAlertError::CertificateVerify {
@@ -1612,7 +1643,8 @@ where
         };
 
         // The server's Finished, then the client's.
-        let message = read_message::<W, _>(host, limits, hash).await?;
+        let message =
+            read_message::<W, _>(host, limits, hash, &[ReceivedMessageType::Finished]).await?;
         let (mut master, one_rtt) = authenticated
             .server_finished(&message)
             .map_err(|source| alert(ClientAlertError::Finished { source }))?;
@@ -1688,7 +1720,9 @@ where
 
         // The tickets the server sends.
         loop {
-            let message = read_message::<W, _>(host, limits, hash).await?;
+            let message =
+                read_message::<W, _>(host, limits, hash, &[ReceivedMessageType::NewSessionTicket])
+                    .await?;
             let received = read_new_session_ticket(&mut message.encoded().clone())
                 .map_err(|source| alert(ClientAlertError::NewSessionTicket { source }))?;
             let early_data =

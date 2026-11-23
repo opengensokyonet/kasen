@@ -11,7 +11,7 @@ use core::{
     task::{Context, Poll, Waker},
 };
 use nitori_crypto::HashAlgorithm;
-use nitori_io::Read;
+use nitori_io::{Read, calls::ReadArrayError};
 
 /// A source that waits before each byte.
 struct Trickle {
@@ -144,6 +144,33 @@ fn a_stream_that_ends_within_a_message_is_a_decode_error() {
             .unwrap_err();
         assert_eq!(error.alert(), AlertDescription::DECODE_ERROR, "{error:?}");
     }
+}
+
+/// A body longer than the buffer a message starts with is collected whole,
+/// and a stream that ends within it reports how much of the body arrived.
+#[test]
+fn a_long_body_is_collected_as_it_grows() {
+    let body: Vec<u8> = (0..40_000u32).map(|i| i as u8).collect();
+    let encoded = message(11, &body);
+    let read = encoded
+        .as_slice()
+        .sync_read_handshake_message_unpin(MessageLimits::default(), None)
+        .unwrap();
+    assert_eq!(read.encoded().as_ref(), encoded);
+    assert_eq!(read.encoded().len(), 4 + body.len());
+
+    let error = encoded[..4 + 20_000]
+        .as_ref()
+        .sync_read_handshake_message_unpin(MessageLimits::default(), None)
+        .unwrap_err();
+    let ReadHandshakeMessageError::Body {
+        source: ReadArrayError::Incomplete { source },
+    } = &error
+    else {
+        panic!("{error:?}")
+    };
+    assert_eq!((source.expected(), source.completed()), (40_000, 20_000));
+    assert_eq!(error.alert(), AlertDescription::DECODE_ERROR);
 }
 
 #[test]
