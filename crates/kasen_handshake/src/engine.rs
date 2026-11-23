@@ -208,6 +208,10 @@ pub enum ProtocolViolationError {
         /// The session ID.
         source: LegacySessionIdError,
     },
+    /// The server sent a CertificateRequest after the handshake, which asks
+    /// for post-handshake client authentication (RFC 9001 §4.4, MUST).
+    #[snafu(display("CertificateRequest after the handshake"))]
+    PostHandshakeCertificateRequest,
 }
 
 /// The max_early_data_size of a NewSessionTicket is not 0xffffffff.

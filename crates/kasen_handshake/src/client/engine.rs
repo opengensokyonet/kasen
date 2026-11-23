@@ -37,7 +37,8 @@
 //!    streams to 1-RTT and keeps the tickets of the NewSessionTicket
 //!    messages the server sends, for as long as it runs; a ticket that
 //!    allows 0-RTT with a max_early_data_size other than 0xffffffff ends it
-//!    with [`HandshakeError::ProtocolViolation`] (RFC 9001 §4.6.1).
+//!    with [`HandshakeError::ProtocolViolation`] (RFC 9001 §4.6.1), and so
+//!    does a CertificateRequest (§4.4).
 //!
 //! A failure ends the handshake with a [`HandshakeError`].
 //!
@@ -67,7 +68,8 @@ use crate::{
     crypto::TlsCrypto,
     engine::{
         CryptoInput, CryptoInputExt as _, CryptoLevel, CryptoOutput, CryptoOutputExt as _,
-        HandshakeError, MaxEarlyDataSizeError, encode, split_read, split_write,
+        HandshakeError, MaxEarlyDataSizeError, ProtocolViolationError, encode, split_read,
+        split_write,
     },
     extension::{
         OpaqueData,
@@ -1718,11 +1720,24 @@ where
         move_to::<W, _>(host, CryptoLevel::OneRtt)?;
         let hash = Some(suite.hash().algorithm());
 
-        // The tickets the server sends.
+        // The tickets the server sends. A CertificateRequest asks for
+        // post-handshake authentication, which QUIC forbids (RFC 9001 §4.4).
         loop {
-            let message =
-                read_message::<W, _>(host, limits, hash, &[ReceivedMessageType::NewSessionTicket])
-                    .await?;
+            let message = read_message::<W, _>(
+                host,
+                limits,
+                hash,
+                &[
+                    ReceivedMessageType::NewSessionTicket,
+                    ReceivedMessageType::CertificateRequest,
+                ],
+            )
+            .await?;
+            if message.handshake_type() == HandshakeType::CERTIFICATE_REQUEST {
+                return Err(HandshakeError::ProtocolViolation {
+                    source: ProtocolViolationError::PostHandshakeCertificateRequest,
+                });
+            }
             let received = read_new_session_ticket(&mut message.encoded().clone())
                 .map_err(|source| alert(ClientAlertError::NewSessionTicket { source }))?;
             let early_data =
