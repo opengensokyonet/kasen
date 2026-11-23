@@ -450,6 +450,12 @@ pub mod codec {
     ) -> Result<ServerHelloMessage<S>, ReadServerHelloMessageError> {
         use read_server_hello_message_error::*;
         let legacy_version = ProtocolVersion::new(read_u16(src).context(LegacyVersionSnafu)?);
+        if legacy_version != ProtocolVersion::TLS_1_2 {
+            return LegacyVersionNotTls12Snafu {
+                version: legacy_version,
+            }
+            .fail();
+        }
         let random = HelloRandom(read_array(src).context(RandomSnafu)?);
         let legacy_session_id_echo = read_session_id(src).context(SessionIdSnafu)?;
         let cipher_suite = CipherSuite::new(read_u16(src).context(CipherSuiteSnafu)?);
@@ -588,6 +594,12 @@ pub mod codec {
             /// The shortfall.
             source: IncompleteError,
         },
+        /// legacy_version is not TLS 1.2 (RFC 9846 §4.2.3).
+        #[snafu(display("ServerHello legacy_version is {version:?}, not TLS 1.2"))]
+        LegacyVersionNotTls12 {
+            /// The version.
+            version: ProtocolVersion,
+        },
         /// random could not be read.
         #[snafu(display("ServerHello random read failed"))]
         Random {
@@ -693,13 +705,15 @@ pub mod codec {
     impl ReadServerHelloMessageError {
         /// The alert the failure calls for.
         ///
-        /// illegal_parameter for a compression method other than 0, for a
-        /// type that appears twice and for a recognized extension this
-        /// message may not carry (RFC 9846 §4.3); decode_error for every
-        /// failure to decode.
+        /// protocol_version for a legacy_version other than TLS 1.2
+        /// (RFC 9846 §4.2.3); illegal_parameter for a compression method
+        /// other than 0, for a type that appears twice and for a recognized
+        /// extension this message may not carry (§4.3); decode_error for
+        /// every failure to decode.
         pub fn alert(&self) -> AlertDescription {
             match self {
                 Self::Header { source } => source.alert(),
+                Self::LegacyVersionNotTls12 { .. } => AlertDescription::PROTOCOL_VERSION,
                 Self::CompressionMethodNotNull => AlertDescription::ILLEGAL_PARAMETER,
                 Self::Extensions { source } => source.alert(),
                 Self::ExtensionNotAllowed { source } => source.alert(),

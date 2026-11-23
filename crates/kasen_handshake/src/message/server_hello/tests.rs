@@ -151,3 +151,18 @@ fn construction_rejects_the_retry_random() {
     .unwrap_err();
     assert!(matches!(error, InvalidServerHelloError::RetryRandom));
 }
+
+#[test]
+fn a_legacy_version_other_than_tls_1_2_is_a_protocol_version_error() {
+    for random in [[7; 32], HELLO_RETRY_REQUEST_RANDOM.0] {
+        let mut bytes = server_hello(&random, 0, VERSION);
+        bytes[4..6].copy_from_slice(&[0x03, 0x04]);
+        let error = read(bytes).unwrap_err();
+        assert!(matches!(
+            error,
+            ReadServerHelloMessageError::LegacyVersionNotTls12 { version }
+                if version == ProtocolVersion::TLS_1_3
+        ));
+        assert_eq!(error.alert(), AlertDescription::PROTOCOL_VERSION);
+    }
+}

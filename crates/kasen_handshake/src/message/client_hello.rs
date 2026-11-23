@@ -373,6 +373,12 @@ pub mod codec {
     ) -> Result<ClientHello<S>, ReadClientHelloError> {
         use read_client_hello_error::*;
         let legacy_version = ProtocolVersion::new(read_u16(src).context(LegacyVersionSnafu)?);
+        if legacy_version != ProtocolVersion::TLS_1_2 {
+            return LegacyVersionNotTls12Snafu {
+                version: legacy_version,
+            }
+            .fail();
+        }
         let random = super::HelloRandom(read_array(src).context(RandomSnafu)?);
         let legacy_session_id = read_session_id(src).context(SessionIdSnafu)?;
         let cipher_suites =
@@ -381,6 +387,9 @@ pub mod codec {
             .context(CompressionMethodsSnafu)?;
         if compression.remaining() != 1 || compression.get_u8() != 0 {
             return CompressionMethodsNotNullSnafu.fail();
+        }
+        if !src.has_remaining() {
+            return ExtensionsAbsentSnafu.fail();
         }
         let block = read_extension_block(src).context(ExtensionsSnafu)?;
         LengthOutOfRangeError::check(block.remaining(), BLOCK).context(ExtensionsLengthSnafu)?;
@@ -500,6 +509,12 @@ pub mod codec {
             /// The shortfall.
             source: IncompleteError,
         },
+        /// legacy_version is not TLS 1.2 (RFC 9846 §4.2.2).
+        #[snafu(display("ClientHello legacy_version is {version:?}, not TLS 1.2"))]
+        LegacyVersionNotTls12 {
+            /// The version.
+            version: ProtocolVersion,
+        },
         /// random could not be read.
         #[snafu(display("ClientHello random read failed"))]
         Random {
@@ -528,6 +543,11 @@ pub mod codec {
         /// (RFC 9846 §4.2.2).
         #[snafu(display("ClientHello legacy_compression_methods is not the null method"))]
         CompressionMethodsNotNull,
+        /// No extension block follows legacy_compression_methods: the
+        /// ClientHello is of a TLS version before 1.3 (RFC 9846 §4.2.2,
+        /// Appendix E.2).
+        #[snafu(display("ClientHello has no extensions"))]
+        ExtensionsAbsent,
         /// The extension block could not be read, or a type appears twice.
         #[snafu(display("ClientHello extensions read failed"))]
         Extensions {
@@ -628,14 +648,19 @@ pub mod codec {
     impl ReadClientHelloError {
         /// The alert the failure calls for.
         ///
+        /// protocol_version for a legacy_version other than TLS 1.2 and
+        /// without extensions (RFC 9846 §4.2.2, Appendix E.2);
         /// illegal_parameter for compression methods other than the null
         /// method and for `pre_shared_key` before another extension
-        /// (RFC 9846 §4.2.2, §4.3.11), for a type that appears twice and for
-        /// the rules within an extension that name it; decode_error for every
-        /// failure to decode.
+        /// (§4.2.2, §4.3.11), for a type that appears twice and for the rules
+        /// within an extension that name it; decode_error for every failure
+        /// to decode.
         pub fn alert(&self) -> AlertDescription {
             match self {
                 Self::Header { source } => source.alert(),
+                Self::LegacyVersionNotTls12 { .. } | Self::ExtensionsAbsent => {
+                    AlertDescription::PROTOCOL_VERSION
+                }
                 Self::CompressionMethodsNotNull | Self::PreSharedKeyNotLast => {
                     AlertDescription::ILLEGAL_PARAMETER
                 }

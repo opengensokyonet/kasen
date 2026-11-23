@@ -288,3 +288,23 @@ fn construction_checks_the_block() {
     assert!(OpaqueData::new(&long[1..]).is_ok());
     assert!(UnknownExtension::new(ExtensionType::KEY_SHARE, &[][..]).is_err());
 }
+
+#[test]
+fn a_hello_of_an_earlier_version_is_a_protocol_version_error() {
+    let mut bytes = client_hello(&versions());
+    bytes[4..6].copy_from_slice(&[0x03, 0x01]);
+    let error = read(&bytes).unwrap_err();
+    assert!(matches!(
+        error,
+        ReadClientHelloError::LegacyVersionNotTls12 { version }
+            if version == ProtocolVersion::new(0x0301)
+    ));
+    assert_eq!(error.alert(), AlertDescription::PROTOCOL_VERSION);
+
+    // A hello before extensions ends after legacy_compression_methods
+    // (RFC 9846 Appendix E.2).
+    let body = client_hello_body(&[], &[0x13, 0x01], &[0], &[]);
+    let error = read(&message(1, &body[..body.len() - 2])).unwrap_err();
+    assert!(matches!(error, ReadClientHelloError::ExtensionsAbsent));
+    assert_eq!(error.alert(), AlertDescription::PROTOCOL_VERSION);
+}
