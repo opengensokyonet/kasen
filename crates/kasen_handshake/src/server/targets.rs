@@ -107,8 +107,8 @@ impl<T> SniTargets<T> {
     }
 
     /// Serves `target` for `host_name` with `protocols`, replacing an
-    /// earlier target of the name. A trailing dot of `host_name` is not part
-    /// of the name.
+    /// earlier target of the name. One trailing dot of `host_name` is not
+    /// part of the name; the name is not checked otherwise.
     pub fn insert(&mut self, host_name: &str, target: T, protocols: Vec<ProtocolName<Bytes>>) {
         let host_name = host_name.strip_suffix('.').unwrap_or(host_name);
         self.names.insert(
