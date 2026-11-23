@@ -26,30 +26,36 @@ pub mod ticket;
 /// The server a client connects to: a DNS host name, which the ClientHello
 /// sends in `server_name` and the server's certificate must be valid for.
 ///
-/// The name is kept in lowercase, so that two spellings of one name are
-/// one target.
+/// The name is kept in lowercase and without a trailing dot, so that two
+/// spellings of one name are one target; `server_name` carries no trailing
+/// dot (RFC 6066 §3).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ServerTarget {
     name: DnsName<'static>,
 }
 
 impl ServerTarget {
-    /// The target with the DNS host name `name`.
+    /// The target with the DNS host name `name`, which may end with the dot
+    /// of a fully qualified name.
     ///
     /// # Errors
     ///
     /// [`InvalidHostNameError`] when `name` is not a syntactically valid DNS
     /// name, such as an IP address or a name with an empty label.
     pub fn from_host_name(name: &str) -> Result<Self, InvalidHostNameError> {
-        let parsed = DnsName::try_from(name).map_err(|_| InvalidHostNameError {
+        let invalid = |_| InvalidHostNameError {
             name: name.to_owned(),
-        })?;
+        };
+        let mut parsed = DnsName::try_from(name).map_err(invalid)?;
+        if let Some(relative) = name.strip_suffix('.') {
+            parsed = DnsName::try_from(relative).map_err(invalid)?;
+        }
         Ok(Self {
             name: parsed.to_lowercase_owned(),
         })
     }
 
-    /// The host name, in lowercase.
+    /// The host name, in lowercase and without a trailing dot.
     pub fn host_name(&self) -> &str {
         self.name.as_ref()
     }
@@ -85,5 +91,15 @@ mod tests {
         let error = ServerTarget::from_host_name("192.0.2.1").unwrap_err();
         assert_eq!(error.name(), "192.0.2.1");
         assert!(ServerTarget::from_host_name("a..b").is_err());
+    }
+
+    #[test]
+    fn a_trailing_dot_is_not_part_of_the_target() {
+        let target = ServerTarget::from_host_name("Example.COM.").unwrap();
+        assert_eq!(target.host_name(), "example.com");
+        assert_eq!(target, ServerTarget::from_host_name("example.com").unwrap());
+        for name in [".", "example.com.."] {
+            assert_eq!(ServerTarget::from_host_name(name).unwrap_err().name(), name);
+        }
     }
 }
