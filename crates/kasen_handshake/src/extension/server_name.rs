@@ -1,13 +1,15 @@
 //! The `server_name` extension (RFC 6066 §3).
 //!
-//! In a ClientHello its data is a list of names; host_name is the only name
-//! type, and a list may hold at most one name of each type, so the data is
-//! one [`ServerName`]. In EncryptedExtensions the data is empty.
+//! In a ClientHello and a CertificateRequest (RFC 9261 §4) its data is a
+//! list of names; host_name is the only name type, and a list may hold at
+//! most one name of each type, so the data is one [`ServerName`]. In
+//! EncryptedExtensions the data is empty.
 
 use crate::{vector::LengthOutOfRangeError, width::Width};
 use snafu::Snafu;
 
-/// The data of a `server_name` extension in a ClientHello: one host_name.
+/// The data of a `server_name` extension in a ClientHello or a
+/// CertificateRequest: one host_name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ServerName<C> {
     host_name: C,
@@ -72,7 +74,8 @@ pub mod codec {
     use nitori_io::{SplitTo, error::IncompleteError};
     use snafu::{ResultExt, Snafu};
 
-    /// Reads the data of a `server_name` extension in a ClientHello.
+    /// Reads the data of a `server_name` extension in a ClientHello or a
+    /// CertificateRequest.
     ///
     /// # Errors
     ///
@@ -150,7 +153,8 @@ pub mod codec {
         }
     }
 
-    /// Writes the data of a `server_name` extension in a ClientHello.
+    /// Writes the data of a `server_name` extension in a ClientHello or a
+    /// CertificateRequest.
     ///
     /// # Panics
     ///

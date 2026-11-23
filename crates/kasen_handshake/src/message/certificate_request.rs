@@ -5,6 +5,7 @@ use crate::{
     code_point::CodePointList,
     extension::{
         BlockEntry, ExtensionType, InvalidExtensionBlockError, UnknownExtension, check_block,
+        server_name::ServerName,
     },
     vector::LengthOutOfRangeError,
     width::Width,
@@ -26,6 +27,8 @@ pub struct CertificateRequest<C> {
 /// An extension of a CertificateRequest.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CertificateRequestExtension<C> {
+    /// `server_name` (RFC 9261 §4), which the handshake engines ignore.
+    ServerName(ServerName<C>),
     /// `signature_algorithms`.
     SignatureAlgorithms(CodePointList<SignatureScheme>),
     /// `signature_algorithms_cert`.
@@ -39,6 +42,7 @@ pub enum CertificateRequestExtension<C> {
 impl<C: AsRef<[u8]>> BlockEntry for CertificateRequestExtension<C> {
     fn extension_type(&self) -> ExtensionType {
         match self {
+            Self::ServerName(_) => ExtensionType::SERVER_NAME,
             Self::SignatureAlgorithms(_) => ExtensionType::SIGNATURE_ALGORITHMS,
             Self::SignatureAlgorithmsCert(_) => ExtensionType::SIGNATURE_ALGORITHMS_CERT,
             Self::SignedCertificateTimestamp => ExtensionType::SIGNED_CERTIFICATE_TIMESTAMP,
@@ -48,6 +52,7 @@ impl<C: AsRef<[u8]>> BlockEntry for CertificateRequestExtension<C> {
 
     fn data_len(&self) -> usize {
         match self {
+            Self::ServerName(name) => name.encoded_len(),
             Self::SignatureAlgorithms(list) | Self::SignatureAlgorithmsCert(list) => {
                 list.encoded_len()
             }
@@ -132,9 +137,9 @@ pub enum InvalidCertificateRequestError {
 
 extension_subset! {
     /// A recognized extension that a CertificateRequest may not carry: every one but
-    /// `signature_algorithms`, `signature_algorithms_cert` and `signed_certificate_timestamp`.
+    /// `server_name`, `signature_algorithms`, `signature_algorithms_cert` and
+    /// `signed_certificate_timestamp`.
     CertificateRequestDisallowedExtension {
-        ServerName,
         SupportedGroups,
         ApplicationLayerProtocolNegotiation,
         ClientCertificateType,
@@ -154,6 +159,7 @@ extension_subset! {
     /// An extension a CertificateRequest may carry whose data has a structure, so that bytes can
     /// follow it: every extension it may carry.
     CertificateRequestStructuredExtension {
+        ServerName,
         SignatureAlgorithms,
         SignedCertificateTimestamp,
         SignatureAlgorithmsCert,
@@ -173,6 +179,7 @@ pub mod codec {
         extension::{
             BlockEntry as _, BlockReader, ExtensionNotAllowedError, ReadExtensionBlockError,
             RestrictedExtension, UnknownExtension, excess, not_allowed, read_extension_block,
+            server_name::codec::{ReadServerNameError, read_server_name, write_server_name},
         },
         message::{HandshakeType, ReadHeaderError, read_body},
         vector::{
@@ -218,6 +225,9 @@ pub mod codec {
                 continue;
             };
             extensions.push(match restricted {
+                R::ServerName => {
+                    X::ServerName(read_server_name(&mut data).context(ServerNameSnafu)?)
+                }
                 R::SignatureAlgorithms => X::SignatureAlgorithms(
                     read_code_point_list(&mut data).context(SignatureAlgorithmsSnafu)?,
                 ),
@@ -290,6 +300,12 @@ pub mod codec {
             /// The excess.
             source: ExcessBytesError,
         },
+        /// `server_name` could not be read.
+        #[snafu(display("server_name read failed"))]
+        ServerName {
+            /// The failure.
+            source: ReadServerNameError,
+        },
         /// `signature_algorithms` could not be read.
         #[snafu(display("signature_algorithms read failed"))]
         SignatureAlgorithms {
@@ -306,12 +322,14 @@ pub mod codec {
 
     impl ReadCertificateRequestError {
         /// The alert the failure calls for: illegal_parameter for a type that
-        /// appears twice and for a recognized extension this message may not
-        /// carry, decode_error for every failure to decode.
+        /// appears twice, for a recognized extension this message may not
+        /// carry and for the rules within an extension that name it,
+        /// decode_error for every failure to decode.
         pub fn alert(&self) -> AlertDescription {
             match self {
                 Self::Header { source } => source.alert(),
                 Self::Extensions { source } => source.alert(),
+                Self::ServerName { source } => source.alert(),
                 Self::ExtensionNotAllowed { source } => source.alert(),
                 Self::Excess { .. }
                 | Self::Context { .. }
@@ -340,6 +358,7 @@ pub mod codec {
             dst.put_u16(extension.extension_type().get());
             write_length(dst, Width::U16, extension.data_len());
             match extension {
+                X::ServerName(name) => write_server_name(dst, name),
                 X::SignatureAlgorithms(list) | X::SignatureAlgorithmsCert(list) => {
                     write_code_point_list(dst, list)
                 }
@@ -352,7 +371,10 @@ pub mod codec {
 
 #[cfg(test)]
 mod tests {
-    use super::codec::{ReadCertificateRequestError, read_certificate_request};
+    use super::{
+        CertificateRequestExtension,
+        codec::{ReadCertificateRequestError, read_certificate_request, write_certificate_request},
+    };
     use crate::{
         alert::AlertDescription,
         test_support::{concat, extension, message, vector},
@@ -378,5 +400,31 @@ mod tests {
             ReadCertificateRequestError::ExtensionNotAllowed { .. }
         ));
         assert_eq!(error.alert(), AlertDescription::ILLEGAL_PARAMETER);
+    }
+
+    #[test]
+    fn a_request_may_carry_server_name() {
+        // RFC 9846 Table 1 lists server_name for CertificateRequest.
+        let algorithms = extension(13, &[0x00, 0x02, 0x08, 0x04]);
+        let name = extension(0, &[0x00, 0x04, 0x00, 0x00, 0x01, b'a']);
+        let bytes = message(
+            13,
+            &concat(&[&[0], &vector(2, &concat(&[&name, &algorithms]))]),
+        );
+        let request = read_certificate_request(&mut bytes.as_slice()).unwrap();
+        let [CertificateRequestExtension::ServerName(found), _] = request.extensions() else {
+            panic!("{request:?}")
+        };
+        assert_eq!(found.host_name(), b"a");
+        let mut output = Vec::new();
+        write_certificate_request(&mut output, &request);
+        assert_eq!(output, bytes);
+
+        let error = read(&concat(&[&extension(0, &[0x00, 0x00]), &algorithms])).unwrap_err();
+        assert!(matches!(
+            error,
+            ReadCertificateRequestError::ServerName { .. }
+        ));
+        assert_eq!(error.alert(), AlertDescription::DECODE_ERROR);
     }
 }

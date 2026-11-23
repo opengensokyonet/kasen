@@ -297,6 +297,7 @@ fn extension_subset_follow_the_table() {
         CertificateRequestDisallowedExtension::of,
         CertificateRequestDisallowedExtension::restricted,
         &[
+            ServerName,
             SignatureAlgorithms,
             SignatureAlgorithmsCert,
             SignedCertificateTimestamp,
@@ -379,6 +380,7 @@ fn structured_extensions_are_the_allowed_ones_with_a_structure() {
         CertificateRequestStructuredExtension::of,
         CertificateRequestStructuredExtension::restricted,
         &[
+            ServerName,
             SignatureAlgorithms,
             SignatureAlgorithmsCert,
             SignedCertificateTimestamp,

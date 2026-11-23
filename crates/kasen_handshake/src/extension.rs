@@ -119,7 +119,7 @@ impl ExtensionType {
 ///
 /// | Extension | Messages |
 /// | --- | --- |
-/// | `server_name` | ClientHello, EncryptedExtensions |
+/// | `server_name` | ClientHello, EncryptedExtensions, CertificateRequest |
 /// | `supported_groups` | ClientHello, EncryptedExtensions |
 /// | `signature_algorithms` | ClientHello, CertificateRequest |
 /// | `application_layer_protocol_negotiation` | ClientHello, EncryptedExtensions |
