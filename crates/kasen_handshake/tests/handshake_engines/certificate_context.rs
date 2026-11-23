@@ -69,3 +69,37 @@ fn a_server_certificate_with_a_context_fails_with_illegal_parameter() {
     ));
     assert_eq!(alert_of(end), AlertDescription::ILLEGAL_PARAMETER);
 }
+
+/// A CertificateRequest with an empty context, server_name and
+/// signature_algorithms.
+const REQUEST_WITH_NAME: [u8; 25] = [
+    13, 0, 0, 21, // header
+    0,  // certificate_request_context
+    0, 18, // extensions
+    0, 0, 0, 6, 0, 4, 0, 0, 1, b'a', // server_name: "a"
+    0, 13, 0, 4, 0, 2, 0x08, 0x07, // signature_algorithms: Ed25519
+];
+
+#[test]
+fn a_certificate_request_may_carry_server_name() {
+    // RFC 9846 Table 1 lists server_name for a CertificateRequest. The
+    // inserted message changes the transcript, so the client goes on past
+    // the request and fails on the server's CertificateVerify instead.
+    let connection = connect!(
+        &Endpoints::new(),
+        Wire::new(),
+        "example.com",
+        |from, level, bytes: &mut Vec<u8>| {
+            if from == Sender::Server
+                && level == CryptoLevel::Handshake
+                && let Some(certificate) = first(bytes, HandshakeType::CERTIFICATE)
+            {
+                bytes.splice(certificate.start..certificate.start, REQUEST_WITH_NAME);
+            }
+        }
+    );
+    assert_eq!(
+        alert_of(connection.client_end),
+        AlertDescription::DECRYPT_ERROR
+    );
+}

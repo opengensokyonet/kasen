@@ -76,6 +76,9 @@ impl<C: AsRef<[u8]>> BlockEntry for ServerHelloExtension<C> {
 impl<C: AsRef<[u8]>> ServerHello<C> {
     /// The ServerHello with these fields.
     ///
+    /// A `legacy_version` other than TLS 1.2 is kept, though the reader of
+    /// this message rejects it (RFC 9846 §4.2.2, §4.2.3).
+    ///
     /// # Errors
     ///
     /// [`InvalidServerHelloError::RetryRandom`] for the random of a
@@ -237,6 +240,9 @@ impl<C: AsRef<[u8]>> BlockEntry for HelloRetryRequestExtension<C> {
 
 impl<C: AsRef<[u8]>> HelloRetryRequest<C> {
     /// The HelloRetryRequest with these fields.
+    ///
+    /// A `legacy_version` other than TLS 1.2 is kept, though the reader of
+    /// this message rejects it (RFC 9846 §4.2.2, §4.2.3).
     ///
     /// # Errors
     ///

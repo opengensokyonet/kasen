@@ -139,6 +139,9 @@ const BLOCK: core::ops::RangeInclusive<usize> = 8..=Width::U16.max();
 impl<C: AsRef<[u8]>> ClientHello<C> {
     /// The ClientHello with these fields.
     ///
+    /// A `legacy_version` other than TLS 1.2 is kept, though the reader of
+    /// this message rejects it (RFC 9846 §4.2.2, §4.2.3).
+    ///
     /// # Errors
     ///
     /// [`InvalidClientHelloError::Extensions`] for an extension type that appears
@@ -385,11 +388,13 @@ pub mod codec {
             read_code_point_list::<CipherSuite, _>(src).context(CipherSuitesSnafu)?;
         let mut compression = read_bounded_vector(src, Width::U8, 1..=Width::U8.max())
             .context(CompressionMethodsSnafu)?;
-        if compression.remaining() != 1 || compression.get_u8() != 0 {
-            return CompressionMethodsNotNullSnafu.fail();
-        }
+        // A ClientHello of an earlier version, which may offer other
+        // compression methods, has no extension block (Appendix E.2).
         if !src.has_remaining() {
             return ExtensionsAbsentSnafu.fail();
+        }
+        if compression.remaining() != 1 || compression.get_u8() != 0 {
+            return CompressionMethodsNotNullSnafu.fail();
         }
         let block = read_extension_block(src).context(ExtensionsSnafu)?;
         LengthOutOfRangeError::check(block.remaining(), BLOCK).context(ExtensionsLengthSnafu)?;

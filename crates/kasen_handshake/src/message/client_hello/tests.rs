@@ -307,4 +307,10 @@ fn a_hello_of_an_earlier_version_is_a_protocol_version_error() {
     let error = read(&message(1, &body[..body.len() - 2])).unwrap_err();
     assert!(matches!(error, ReadClientHelloError::ExtensionsAbsent));
     assert_eq!(error.alert(), AlertDescription::PROTOCOL_VERSION);
+
+    // Such a hello may offer more compression methods than null.
+    let body = client_hello_body(&[], &[0x13, 0x01], &[1, 0], &[]);
+    let error = read(&message(1, &body[..body.len() - 2])).unwrap_err();
+    assert!(matches!(error, ReadClientHelloError::ExtensionsAbsent));
+    assert_eq!(error.alert(), AlertDescription::PROTOCOL_VERSION);
 }
