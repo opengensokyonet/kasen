@@ -6,12 +6,12 @@ use crate::{alert::AlertDescription, test_support::message};
 use bytes::BufMut;
 use core::future::Future as _;
 use core::{
-    convert::Infallible,
+    num::NonZeroUsize,
     pin::Pin,
     task::{Context, Poll, Waker},
 };
 use nitori_crypto::HashAlgorithm;
-use nitori_io::{Read, calls::ReadArrayError};
+use nitori_io::{Read, ReadSegment, calls::ReadArrayError};
 
 /// A source that waits before each byte.
 struct Trickle {
@@ -22,13 +22,14 @@ struct Trickle {
 nitori_call::family_receiver!(impl [] for Trickle);
 
 impl Read for Trickle {
-    type Error = Infallible;
+    type Error = !;
+    type Metadata = ();
 
     fn poll_read<'visit, Output: BufMut + ?Sized>(
         host: Pin<&mut Self::ReceiverView<'visit>>,
         cx: &mut Context<'_>,
         destination: &mut Output,
-    ) -> Poll<Result<usize, Self::Error>>
+    ) -> Poll<Result<Option<ReadSegment<()>>, Self::Error>>
     where
         Self: 'visit,
     {
@@ -40,10 +41,13 @@ impl Read for Trickle {
         }
         source.ready = false;
         if source.bytes.is_empty() || !destination.has_remaining_mut() {
-            return Poll::Ready(Ok(0));
+            return Poll::Ready(Ok(None));
         }
         destination.put_u8(source.bytes.remove(0));
-        Poll::Ready(Ok(1))
+        Poll::Ready(Ok(Some(ReadSegment {
+            count: NonZeroUsize::MIN,
+            metadata: (),
+        })))
     }
 }
 

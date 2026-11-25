@@ -11,11 +11,11 @@ license = "Apache-2.0 OR MIT"
 [workspace.dependencies]
 bytes = { version = "1.12.1", default-features = false }
 hashbrown = { version = "0.17.1", default-features = false }
-nitori_call = { git = "https://github.com/opengensokyonet/nitori", rev = "07fe74384306104fb67f75001849f8974b96791f", default-features = false }
-nitori_crypto = { git = "https://github.com/opengensokyonet/nitori", rev = "07fe74384306104fb67f75001849f8974b96791f" }
-nitori_crypto_aws_lc = { git = "https://github.com/opengensokyonet/nitori", rev = "07fe74384306104fb67f75001849f8974b96791f" }
-nitori_io = { git = "https://github.com/opengensokyonet/nitori", rev = "07fe74384306104fb67f75001849f8974b96791f", default-features = false }
-nitori_sync = { git = "https://github.com/opengensokyonet/nitori", rev = "07fe74384306104fb67f75001849f8974b96791f", default-features = false }
+nitori_call = { git = "https://github.com/opengensokyonet/nitori", rev = "0de5f36b921c891815d138226c6180c6aa70953b", default-features = false }
+nitori_crypto = { git = "https://github.com/opengensokyonet/nitori", rev = "0de5f36b921c891815d138226c6180c6aa70953b" }
+nitori_crypto_aws_lc = { git = "https://github.com/opengensokyonet/nitori", rev = "0de5f36b921c891815d138226c6180c6aa70953b" }
+nitori_io = { git = "https://github.com/opengensokyonet/nitori", rev = "0de5f36b921c891815d138226c6180c6aa70953b", default-features = false }
+nitori_sync = { git = "https://github.com/opengensokyonet/nitori", rev = "0de5f36b921c891815d138226c6180c6aa70953b", default-features = false }
 rustls = { version = "0.23.46", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-pki-types = { version = "1.15.1", default-features = false, features = ["alloc"] }
 rustls-webpki = { version = "0.103.16", default-features = false, features = ["alloc"] }

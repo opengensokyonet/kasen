@@ -459,7 +459,7 @@ pub mod codec {
     ///
     /// [`ReadHandshakeMessageError`].
     #[call(sync)]
-    pub async fn read_handshake_message<F: Read, A: ReceiverAccess<Family = F>>(
+    pub async fn read_handshake_message<F: Read<Metadata = ()>, A: ReceiverAccess<Family = F>>(
         io: &mut A,
         limits: MessageLimits,
         hash: Option<HashAlgorithm>,
@@ -487,14 +487,14 @@ pub mod codec {
     /// only the types in `expected`: a message of another type fails with
     /// [`UnexpectedMessageError`] before its body is read, and the limits of
     /// the other types do not apply.
-    pub(crate) async fn read_expected_handshake_message<F: Read>(
+    pub(crate) async fn read_expected_handshake_message<F: Read<Metadata = ()>>(
         io: &mut impl ReceiverAccess<Family = F>,
         limits: MessageLimits,
         hash: Option<HashAlgorithm>,
         expected: &[ReceivedMessageType],
     ) -> Result<HandshakeMessage, ReadHandshakeMessageError<F::Error>> {
         use read_handshake_message_error::*;
-        let header = io.read_array::<4>().await.context(HeaderSnafu)?;
+        let header = io.read_array::<4>().await.context(HeaderSnafu)?.value;
         let message_type = HandshakeType(header[0]);
         let len = u32::from_be_bytes([0, header[1], header[2], header[3]]);
         let Some(received) =

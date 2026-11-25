@@ -4,6 +4,7 @@
 
 use bytes::{Buf, BufMut, Bytes};
 use core::{
+    num::NonZeroUsize,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -18,7 +19,7 @@ use kasen_handshake::{
     },
 };
 use nitori_call::{BorrowedReceiver, family_receiver};
-use nitori_io::{Read, Write};
+use nitori_io::{Read, ReadSegment, Write, WriteSegment};
 use std::collections::VecDeque;
 
 /// A failure of the receivers in memory.
@@ -165,12 +166,13 @@ family_receiver!(impl [P: Unpin + 'static] for Side<P>);
 
 impl<P: Unpin + 'static> Read for Side<P> {
     type Error = Fault;
+    type Metadata = ();
 
     fn poll_read<'v, Output: BufMut + ?Sized>(
         host: Pin<&mut BorrowedReceiver<'v, Side<P>>>,
         _: &mut Context<'_>,
         destination: &mut Output,
-    ) -> Poll<Result<usize, Fault>>
+    ) -> Poll<Result<Option<ReadSegment<()>>, Fault>>
     where
         Self: 'v,
     {
@@ -178,7 +180,12 @@ impl<P: Unpin + 'static> Read for Side<P> {
             .get_mut()
             .input
             .poll_read(destination)
-            .map(Ok)
+            .map(|count| {
+                Ok(NonZeroUsize::new(count).map(|count| ReadSegment {
+                    count,
+                    metadata: (),
+                }))
+            })
     }
 }
 
@@ -198,16 +205,20 @@ impl<P: Unpin + 'static> CryptoInput for Side<P> {
 
 impl<P: Unpin + 'static> Write for Side<P> {
     type Error = Fault;
+    type Report = ();
 
     fn poll_write<'v, Input: Buf + ?Sized>(
         host: Pin<&mut BorrowedReceiver<'v, Side<P>>>,
         _: &mut Context<'_>,
         input: &mut Input,
-    ) -> Poll<Result<usize, Fault>>
+    ) -> Poll<Result<Option<WriteSegment<()>>, Fault>>
     where
         Self: 'v,
     {
-        Poll::Ready(Ok(host.get_pin_mut().get_mut().output.write(input)))
+        let count = host.get_pin_mut().get_mut().output.write(input);
+        Poll::Ready(Ok(
+            NonZeroUsize::new(count).map(|count| WriteSegment { count, report: () })
+        ))
     }
 }
 

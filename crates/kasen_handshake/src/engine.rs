@@ -61,13 +61,13 @@ pub enum CryptoLevel {
 }
 
 /// The CRYPTO bytes a handshake engine receives: those of the current
-/// level, read with [`Read`].
+/// level, read with [`Read`]. CRYPTO bytes carry no metadata.
 ///
 /// Reading waits for bytes that have not arrived. A level begins as
 /// [`CryptoLevel::Initial`] and moves forward with
 /// [`CryptoInput::move_input_to`].
 #[capability]
-pub trait CryptoInput: Read {
+pub trait CryptoInput: Read<Metadata = ()> {
     /// A failure to move to a level.
     type LevelError;
 
@@ -86,13 +86,13 @@ pub trait CryptoInput: Read {
 }
 
 /// The CRYPTO bytes a handshake engine sends: those of the current level,
-/// written with [`Write`].
+/// written with [`Write`]. Writes report nothing.
 ///
 /// A level begins as [`CryptoLevel::Initial`] and moves forward with
 /// [`CryptoOutput::move_output_to`]; what was written before stays at its
 /// level.
 #[capability]
-pub trait CryptoOutput: Write {
+pub trait CryptoOutput: Write<Report = ()> {
     /// Moves to `level`: later writes go to it.
     fn move_output_to<'v>(view: Pin<&mut Self::ReceiverView<'v>>, level: CryptoLevel)
     where
