@@ -12,7 +12,7 @@ This repository currently contains one package, `kasen_handshake`: TLS 1.3 hands
 
 ## Development
 
-Install [rustup](https://rustup.rs/). The repository pins `nightly-2026-11-03` with rustfmt, Clippy and the `x86_64-unknown-none` target in `rust-toolchain.toml`. Run commands from the repository root so rustup selects this toolchain. Nightly language features are required. Packages remain unpublished (`publish = false`). `kasen_handshake` builds without the standard library, with `alloc`; the parts that need it are behind its default `std` feature. It is checked on `x86_64-unknown-none`, a target without the standard library that has 64-bit atomics. `nitori_crypto_aws_lc`, a development dependency, also needs a C compiler and CMake.
+Install [rustup](https://rustup.rs/). The repository pins `nightly-2026-11-25` with rustfmt, Clippy and the `x86_64-unknown-none` target in `rust-toolchain.toml`. Run commands from the repository root so rustup selects this toolchain. Nightly language features are required. Packages remain unpublished (`publish = false`). `kasen_handshake` builds without the standard library, with `alloc`; the parts that need it are behind its default `std` feature. It is checked on `x86_64-unknown-none`, a target without the standard library that has 64-bit atomics. `nitori_crypto_aws_lc`, a development dependency, also needs a C compiler and CMake.
 
 SNAFU is pinned to commit `03cb8d2e52a3b0b33a39cc3d4ce8a7075fa4ab58` in the public [Open Gensokyo Network fork](https://github.com/opengensokyonet/snafu), pending [upstream PR #565](https://github.com/shepmaster/snafu/pull/565). Cargo fetches this source automatically; no sibling checkout is needed. The nitori packages are Git dependencies pinned to a commit.
 
