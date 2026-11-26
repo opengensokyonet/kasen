@@ -219,7 +219,9 @@ pub trait ServerHandshakeCapability<T>: CryptoInput + CryptoOutput + ServerTrans
     ) -> <Self as ServerTransport<T>>::Error;
 
     /// Converts a failure to write CRYPTO bytes.
-    fn convert_write_error(error: <Self as Write>::Error) -> <Self as ServerTransport<T>>::Error;
+    fn convert_write_error(
+        error: <Self as Write<()>>::Error,
+    ) -> <Self as ServerTransport<T>>::Error;
 }
 
 impl<T, W> ServerHandshakeCapability<T> for W
@@ -227,7 +229,7 @@ where
     W: CryptoInput + CryptoOutput + ServerTransport<T>,
     <W as Read>::Error: Into<<W as ServerTransport<T>>::Error>,
     <W as CryptoInput>::LevelError: Into<<W as ServerTransport<T>>::Error>,
-    <W as Write>::Error: Into<<W as ServerTransport<T>>::Error>,
+    <W as Write<()>>::Error: Into<<W as ServerTransport<T>>::Error>,
 {
     fn convert_read_error(error: <W as Read>::Error) -> <W as ServerTransport<T>>::Error {
         error.into()
@@ -239,7 +241,7 @@ where
         error.into()
     }
 
-    fn convert_write_error(error: <W as Write>::Error) -> <W as ServerTransport<T>>::Error {
+    fn convert_write_error(error: <W as Write<()>>::Error) -> <W as ServerTransport<T>>::Error {
         error.into()
     }
 }
@@ -814,7 +816,7 @@ async fn write_message<T, W, L, S, G, K>(
 where
     W: ServerHandshakeCapability<T>,
 {
-    host.write_all(message)
+    host.write_all(message, ())
         .await
         .map_err(|error| match split_write(error) {
             Ok(source) => alert(ServerAlertError::OutputStopped { source }),

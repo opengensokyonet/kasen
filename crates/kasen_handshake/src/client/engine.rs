@@ -214,7 +214,7 @@ pub trait ClientHandshakeCapability: CryptoInput + CryptoOutput + ClientTranspor
     ) -> <Self as ClientTransport>::Error;
 
     /// Converts a failure to write CRYPTO bytes.
-    fn convert_write_error(error: <Self as Write>::Error) -> <Self as ClientTransport>::Error;
+    fn convert_write_error(error: <Self as Write<()>>::Error) -> <Self as ClientTransport>::Error;
 }
 
 impl<W> ClientHandshakeCapability for W
@@ -222,7 +222,7 @@ where
     W: CryptoInput + CryptoOutput + ClientTransport,
     <W as Read>::Error: Into<<W as ClientTransport>::Error>,
     <W as CryptoInput>::LevelError: Into<<W as ClientTransport>::Error>,
-    <W as Write>::Error: Into<<W as ClientTransport>::Error>,
+    <W as Write<()>>::Error: Into<<W as ClientTransport>::Error>,
 {
     fn convert_read_error(error: <W as Read>::Error) -> <W as ClientTransport>::Error {
         error.into()
@@ -232,7 +232,7 @@ where
         error.into()
     }
 
-    fn convert_write_error(error: <W as Write>::Error) -> <W as ClientTransport>::Error {
+    fn convert_write_error(error: <W as Write<()>>::Error) -> <W as ClientTransport>::Error {
         error.into()
     }
 }
@@ -772,7 +772,7 @@ async fn write_message<W: ClientHandshakeCapability, V>(
     host: &mut impl ReceiverAccess<Family = W>,
     message: &[u8],
 ) -> Result<(), Failed<V, W>> {
-    host.write_all(message)
+    host.write_all(message, ())
         .await
         .map_err(|error| match split_write(error) {
             Ok(source) => alert(ClientAlertError::OutputStopped { source }),

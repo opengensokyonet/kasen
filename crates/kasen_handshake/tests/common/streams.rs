@@ -203,7 +203,7 @@ impl<P: Unpin + 'static> CryptoInput for Side<P> {
     }
 }
 
-impl<P: Unpin + 'static> Write for Side<P> {
+impl<P: Unpin + 'static> Write<()> for Side<P> {
     type Error = Fault;
     type Report = ();
 
@@ -211,6 +211,7 @@ impl<P: Unpin + 'static> Write for Side<P> {
         host: Pin<&mut BorrowedReceiver<'v, Side<P>>>,
         _: &mut Context<'_>,
         input: &mut Input,
+        _: &(),
     ) -> Poll<Result<Option<WriteSegment<()>>, Fault>>
     where
         Self: 'v,

@@ -86,13 +86,13 @@ pub trait CryptoInput: Read<Metadata = ()> {
 }
 
 /// The CRYPTO bytes a handshake engine sends: those of the current level,
-/// written with [`Write`]. Writes report nothing.
+/// written with [`Write`] and the options `()`. Writes report nothing.
 ///
 /// A level begins as [`CryptoLevel::Initial`] and moves forward with
 /// [`CryptoOutput::move_output_to`]; what was written before stays at its
 /// level.
 #[capability]
-pub trait CryptoOutput: Write<Report = ()> {
+pub trait CryptoOutput: Write<(), Report = ()> {
     /// Moves to `level`: later writes go to it.
     fn move_output_to<'v>(view: Pin<&mut Self::ReceiverView<'v>>, level: CryptoLevel)
     where
