@@ -177,7 +177,7 @@ checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 [[package]]
 name = "nitori_call"
 version = "0.0.0"
-source = "git+https://github.com/opengensokyonet/nitori?rev=a1abcab33e1a94791e76cd891a87309798d267ac#a1abcab33e1a94791e76cd891a87309798d267ac"
+source = "git+https://github.com/opengensokyonet/nitori?rev=31e9d9daabb3a901f3dc6721a5d3567665d59300#31e9d9daabb3a901f3dc6721a5d3567665d59300"
 dependencies = [
  "bytes",
  "futures-core",
@@ -189,7 +189,7 @@ dependencies = [
 [[package]]
 name = "nitori_call_macros"
 version = "0.0.0"
-source = "git+https://github.com/opengensokyonet/nitori?rev=a1abcab33e1a94791e76cd891a87309798d267ac#a1abcab33e1a94791e76cd891a87309798d267ac"
+source = "git+https://github.com/opengensokyonet/nitori?rev=31e9d9daabb3a901f3dc6721a5d3567665d59300#31e9d9daabb3a901f3dc6721a5d3567665d59300"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -199,7 +199,7 @@ dependencies = [
 [[package]]
 name = "nitori_crypto"
 version = "0.0.0"
-source = "git+https://github.com/opengensokyonet/nitori?rev=a1abcab33e1a94791e76cd891a87309798d267ac#a1abcab33e1a94791e76cd891a87309798d267ac"
+source = "git+https://github.com/opengensokyonet/nitori?rev=31e9d9daabb3a901f3dc6721a5d3567665d59300#31e9d9daabb3a901f3dc6721a5d3567665d59300"
 dependencies = [
  "smallvec",
  "snafu",
@@ -209,7 +209,7 @@ dependencies = [
 [[package]]
 name = "nitori_crypto_aws_lc"
 version = "0.0.0"
-source = "git+https://github.com/opengensokyonet/nitori?rev=a1abcab33e1a94791e76cd891a87309798d267ac#a1abcab33e1a94791e76cd891a87309798d267ac"
+source = "git+https://github.com/opengensokyonet/nitori?rev=31e9d9daabb3a901f3dc6721a5d3567665d59300#31e9d9daabb3a901f3dc6721a5d3567665d59300"
 dependencies = [
  "aws-lc-rs",
  "nitori_crypto",
@@ -220,7 +220,7 @@ dependencies = [
 [[package]]
 name = "nitori_io"
 version = "0.0.0"
-source = "git+https://github.com/opengensokyonet/nitori?rev=a1abcab33e1a94791e76cd891a87309798d267ac#a1abcab33e1a94791e76cd891a87309798d267ac"
+source = "git+https://github.com/opengensokyonet/nitori?rev=31e9d9daabb3a901f3dc6721a5d3567665d59300#31e9d9daabb3a901f3dc6721a5d3567665d59300"
 dependencies = [
  "bytes",
  "nitori_call",
@@ -231,7 +231,7 @@ dependencies = [
 [[package]]
 name = "nitori_sync"
 version = "0.0.0"
-source = "git+https://github.com/opengensokyonet/nitori?rev=a1abcab33e1a94791e76cd891a87309798d267ac#a1abcab33e1a94791e76cd891a87309798d267ac"
+source = "git+https://github.com/opengensokyonet/nitori?rev=31e9d9daabb3a901f3dc6721a5d3567665d59300#31e9d9daabb3a901f3dc6721a5d3567665d59300"
 
 [[package]]
 name = "num-conv"
