@@ -37,7 +37,6 @@ use alloc::{boxed::Box, collections::BTreeSet, sync::Arc, vec::Vec};
 use bytes::Bytes;
 use core::{
     cell::RefCell,
-    convert::Infallible,
     fmt,
     future::{Future, Ready, ready},
     time::Duration,
@@ -326,9 +325,9 @@ impl<Y: Synchronization> Distrust for SpkiDistrustList<Y> {
 pub struct NoRevocationCheck;
 
 impl Revocation for NoRevocationCheck {
-    type Error = Infallible;
+    type Error = !;
 
-    fn check(&self, _path: &VerifiedPath<'_>) -> Result<(), Infallible> {
+    fn check(&self, _path: &VerifiedPath<'_>) -> Result<(), !> {
         Ok(())
     }
 }

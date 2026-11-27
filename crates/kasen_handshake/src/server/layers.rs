@@ -21,10 +21,7 @@
 
 use crate::message::{HandshakeMessage, client_hello::ClientHello};
 use bytes::Bytes;
-use core::{
-    convert::Infallible,
-    future::{Future, Ready, ready},
-};
+use core::future::{Future, Ready, ready};
 use nitori_sync::{SharedState as _, Synchronization};
 
 /// The ClientHello a handshake continues with, after its layers.
@@ -83,8 +80,8 @@ impl AcceptedHello for PassThroughHello {
 
 impl HelloLayers for PassThroughLayers {
     type Accepted = PassThroughHello;
-    type Error = Infallible;
-    type Opening<'a> = Ready<Result<PassThroughHello, Infallible>>;
+    type Error = !;
+    type Opening<'a> = Ready<Result<PassThroughHello, !>>;
 
     /// Hands `hello` over; `first` changes nothing.
     fn open<'a>(
@@ -181,8 +178,8 @@ mod tests {
 
     impl HelloLayers for RecordingLayers {
         type Accepted = PassThroughHello;
-        type Error = core::convert::Infallible;
-        type Opening<'a> = core::future::Ready<Result<PassThroughHello, core::convert::Infallible>>;
+        type Error = !;
+        type Opening<'a> = core::future::Ready<Result<PassThroughHello, !>>;
 
         fn open<'a>(
             &'a self,

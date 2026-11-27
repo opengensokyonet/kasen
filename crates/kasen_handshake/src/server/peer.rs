@@ -10,7 +10,6 @@
 //! reached.
 
 use crate::server::targets::SelectedTarget;
-use core::convert::Infallible;
 
 /// How a server decides whether to ask for a client certificate.
 ///
@@ -28,9 +27,9 @@ pub trait PeerAuthentication<T> {
 pub struct NoCertificateRequest;
 
 impl<T> PeerAuthentication<T> for NoCertificateRequest {
-    type Request = Infallible;
+    type Request = !;
 
-    fn request(&self, _selected: &SelectedTarget<T>) -> Option<Infallible> {
+    fn request(&self, _selected: &SelectedTarget<T>) -> Option<!> {
         None
     }
 }

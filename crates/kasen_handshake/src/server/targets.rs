@@ -12,10 +12,7 @@ use crate::{
 };
 use alloc::{collections::BTreeMap, vec::Vec};
 use bytes::Bytes;
-use core::{
-    convert::Infallible,
-    future::{Future, Ready, ready},
-};
+use core::future::{Future, Ready, ready};
 use snafu::Snafu;
 
 /// A selected target: what the server serves on this connection, with the
@@ -206,9 +203,9 @@ impl<T> PreselectedTarget<T> {
 
 impl<T: Clone> TargetSelection for PreselectedTarget<T> {
     type Target = T;
-    type Error = Infallible;
+    type Error = !;
     type Selecting<'a>
-        = Ready<Result<SelectedTarget<T>, Infallible>>
+        = Ready<Result<SelectedTarget<T>, !>>
     where
         Self: 'a;
 

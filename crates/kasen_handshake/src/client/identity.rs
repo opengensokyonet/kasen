@@ -12,7 +12,6 @@
 
 use crate::{client::ServerTarget, message::certificate_request::CertificateRequest};
 use bytes::Bytes;
-use core::convert::Infallible;
 
 /// How a client decides what it presents when the server asks for a
 /// certificate.
@@ -34,13 +33,9 @@ pub trait ClientCertificateSelection {
 pub struct NoClientCertificate;
 
 impl ClientCertificateSelection for NoClientCertificate {
-    type Presented = Infallible;
+    type Presented = !;
 
-    fn select(
-        &self,
-        _target: &ServerTarget,
-        _request: &CertificateRequest<Bytes>,
-    ) -> Option<Infallible> {
+    fn select(&self, _target: &ServerTarget, _request: &CertificateRequest<Bytes>) -> Option<!> {
         None
     }
 }

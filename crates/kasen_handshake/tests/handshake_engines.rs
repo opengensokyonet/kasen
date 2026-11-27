@@ -745,8 +745,8 @@ struct RecordingLayers(Arc<Mutex<Vec<Option<Vec<u8>>>>>);
 
 impl HelloLayers for RecordingLayers {
     type Accepted = PassThroughHello;
-    type Error = core::convert::Infallible;
-    type Opening<'a> = core::future::Ready<Result<PassThroughHello, core::convert::Infallible>>;
+    type Error = !;
+    type Opening<'a> = core::future::Ready<Result<PassThroughHello, !>>;
 
     fn open<'a>(
         &'a self,

@@ -85,7 +85,7 @@ type FirstClientHelloEnd = ControlFlow<
         kasen_handshake::server::engine::FirstClientHello,
         HandshakeError<ReadFirstClientHelloError, common::streams::Fault>,
     >,
-    core::convert::Infallible,
+    !,
 >;
 
 /// Polls a read of the first ClientHello once on `side`; the largest

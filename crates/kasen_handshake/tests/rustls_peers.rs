@@ -603,7 +603,7 @@ mod client_engine {
     /// One connection between the client's engine and a rustls server.
     struct Connection {
         events: Vec<Event>,
-        end: Option<Result<core::convert::Infallible, String>>,
+        end: Option<Result<!, String>>,
         peer: Peer,
         parameters: ClientParameters,
         logged: Logged,

@@ -225,10 +225,7 @@ mod tests {
     };
     use crate::{server::targets::SelectedTarget, test_support::ready_now};
     use bytes::Bytes;
-    use core::{
-        convert::Infallible,
-        future::{Ready, ready},
-    };
+    use core::future::{Ready, ready};
     use nitori_crypto::{Signature, SignatureScheme, SigningKey};
 
     /// A key that "signs" by echoing the scheme and the content.
@@ -236,8 +233,8 @@ mod tests {
     struct EchoKey(Vec<SignatureScheme>);
 
     impl SigningKey for EchoKey {
-        type Error = Infallible;
-        type Signing<'a> = Ready<Result<Signature, Infallible>>;
+        type Error = !;
+        type Signing<'a> = Ready<Result<Signature, !>>;
 
         fn schemes(&self) -> &[SignatureScheme] {
             &self.0

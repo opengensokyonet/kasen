@@ -121,7 +121,7 @@ use crate::{
 };
 use alloc::{vec, vec::Vec};
 use bytes::Bytes;
-use core::{convert::Infallible, pin::Pin};
+use core::pin::Pin;
 use nitori_call::{LentAccess, ReceiverAccess, ReceiverFamily, call, capability};
 use nitori_crypto::AeadAlgorithm;
 use nitori_crypto::{
@@ -316,7 +316,7 @@ pub trait ClientHandshakeSteps: Sized {
     async fn read_tickets<W: ClientHandshakeCapability>(
         state: Self::ClientHandshakeCompletedState,
         host: &mut impl LentAccess<Family = W>,
-    ) -> Result<Infallible, StepError<Self, W>>;
+    ) -> Result<!, StepError<Self, W>>;
 }
 
 /// How a step of `E` fails on the family `W`.
@@ -452,7 +452,7 @@ where
 pub async fn read_tickets_step<W, E>(
     host: &mut impl LentAccess<Family = W>,
     state: <E as ClientHandshakeSteps>::ClientHandshakeCompletedState,
-) -> Result<Infallible, StepError<E, W>>
+) -> Result<!, StepError<E, W>>
 where
     E: ClientHandshakeSteps,
     W: ClientHandshakeCapability,
@@ -522,7 +522,7 @@ pub enum ClientAlertError<V> {
     #[snafu(display("handshake message read failed"))]
     Message {
         /// The failure.
-        source: ReadHandshakeMessageError<Infallible>,
+        source: ReadHandshakeMessageError<!>,
     },
     /// The ServerHello or HelloRetryRequest could not be read.
     #[snafu(display("ServerHello read failed"))]
@@ -1133,7 +1133,7 @@ where
     K: ClientTicketStore,
     V: CertificateVerifier,
     V::Error: CallsForAlert,
-    P: ClientCertificateSelection<Presented = Infallible>,
+    P: ClientCertificateSelection<Presented = !>,
     Z: Clock,
     G: KeyLog,
 {
@@ -1722,7 +1722,7 @@ where
     async fn read_tickets<W: ClientHandshakeCapability>(
         state: Self::ClientHandshakeCompletedState,
         host: &mut impl LentAccess<Family = W>,
-    ) -> Result<Infallible, StepError<Self, W>> {
+    ) -> Result<!, StepError<Self, W>> {
         let ClientHandshakeCompletedState {
             tickets,
             clock,

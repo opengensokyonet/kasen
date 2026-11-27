@@ -33,7 +33,6 @@ use crate::{
     message::certificate::CertificateEntry,
 };
 use bytes::Bytes;
-use core::convert::Infallible;
 use core::time::Duration;
 use nitori_crypto::{Hash, HashAlgorithm, RunningHash, SignatureScheme};
 use nitori_crypto_aws_lc::AwsLcBackend;
@@ -128,7 +127,7 @@ fn target(name: &str) -> ServerTarget {
     ServerTarget::from_host_name(name).unwrap()
 }
 
-type Error = VerifyCertificateChainError<Infallible, TransparencyError>;
+type Error = VerifyCertificateChainError<!, TransparencyError>;
 
 fn verify(verifier: &Verifier, name: &str) -> Result<super::SubjectPublicKey, Error> {
     verifier.verify_now(&target(name), &chain())

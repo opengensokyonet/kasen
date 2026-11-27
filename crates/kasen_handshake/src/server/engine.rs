@@ -47,7 +47,7 @@
 //! This version neither opens encrypted layers nor asks for a client
 //! certificate: it takes layers whose confirmation and retry
 //! configurations, and a peer authentication whose request, are
-//! [`Infallible`], so those steps have no values to act on.
+//! [`!`], so those steps have no values to act on.
 //!
 //! [`read_first_client_hello`] is a `nitori_call` operation, and `#[call]`
 //! generates [`ReadFirstClientHello`] and its extension trait.
@@ -126,7 +126,7 @@ use crate::{
 };
 use alloc::{vec, vec::Vec};
 use bytes::Bytes;
-use core::{convert::Infallible, pin::Pin, time::Duration};
+use core::{pin::Pin, time::Duration};
 use nitori_call::{LentAccess, ReceiverAccess, ReceiverFamily, call, capability};
 use nitori_crypto::AeadAlgorithm;
 use nitori_crypto::{
@@ -281,7 +281,7 @@ pub enum ReadFirstClientHelloError {
     #[snafu(display("handshake message read failed"))]
     Message {
         /// The failure.
-        source: ReadHandshakeMessageError<Infallible>,
+        source: ReadHandshakeMessageError<!>,
     },
     /// The message is not a ClientHello that could be read.
     #[snafu(display("ClientHello read failed"))]
@@ -591,7 +591,7 @@ pub enum ServerAlertError<L, S, G, K> {
     #[snafu(display("handshake message read failed"))]
     Message {
         /// The failure.
-        source: ReadHandshakeMessageError<Infallible>,
+        source: ReadHandshakeMessageError<!>,
     },
     /// The ClientHello could not be read.
     #[snafu(display("ClientHello read failed"))]
@@ -1041,7 +1041,7 @@ where
     S::Error: CallsForAlert,
     S::Target: Clone + PartialEq,
     P: CertificateSelection<<S as TargetSelection>::Target>,
-    Q: PeerAuthentication<<S as TargetSelection>::Target, Request = Infallible>,
+    Q: PeerAuthentication<<S as TargetSelection>::Target, Request = !>,
     Z: Clock,
     G: KeyLog,
 {

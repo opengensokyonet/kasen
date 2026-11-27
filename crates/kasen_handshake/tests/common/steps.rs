@@ -1,7 +1,6 @@
 //! The steps of each role's handshake run one after another as one call,
 //! as a connection runs them, yielding what each step returns.
 
-use core::convert::Infallible;
 use kasen_handshake::{
     client::engine::{
         ClientHandshakeCapability, ClientHandshakeCompleted, ClientHandshakeSteps, ClientTransport,
@@ -99,7 +98,7 @@ where
 pub async fn client_steps<W, E>(
     host: &mut impl LentAccess<Family = W>,
     tls: E,
-) -> Result<Infallible, ClientFailed<E, W>>
+) -> Result<!, ClientFailed<E, W>>
 where
     E: ClientHandshakeSteps,
     W: ClientHandshakeCapability,

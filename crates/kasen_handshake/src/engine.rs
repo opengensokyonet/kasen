@@ -39,7 +39,7 @@ use crate::{
     message::{LegacySessionId, codec::ReadHandshakeMessageError},
 };
 use alloc::vec::Vec;
-use core::{convert::Infallible, pin::Pin};
+use core::pin::Pin;
 use nitori_call::capability;
 use nitori_io::{
     Read, Write,
@@ -268,8 +268,8 @@ impl LegacySessionIdError {
 /// for an alert and the receiver's own failure.
 pub(crate) fn split_read<E>(
     error: ReadHandshakeMessageError<E>,
-) -> Result<ReadHandshakeMessageError<Infallible>, E> {
-    fn array<E>(error: ReadArrayError<E>) -> Result<ReadArrayError<Infallible>, E> {
+) -> Result<ReadHandshakeMessageError<!>, E> {
+    fn array<E>(error: ReadArrayError<E>) -> Result<ReadArrayError<!>, E> {
         match error {
             ReadArrayError::Incomplete { source } => Ok(ReadArrayError::Incomplete { source }),
             ReadArrayError::Receiver { source, .. } => Err(source),

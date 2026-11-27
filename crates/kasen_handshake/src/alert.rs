@@ -80,7 +80,7 @@ pub trait CallsForAlert {
     fn alert(&self) -> AlertDescription;
 }
 
-impl CallsForAlert for core::convert::Infallible {
+impl CallsForAlert for ! {
     fn alert(&self) -> AlertDescription {
         match *self {}
     }
